@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversion Success</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://socket.io/socket.io.js"></script>
+</head>
+
+<body>
+    <h1>Thanks for using the DOCX to PDF Converter</h1>
+
+    <h2>Your File Conversion Details:</h2>
+    <p>Word Count: <span id="word-count"></span></p>
+    <p>Character Count: <span id="character-count"></span></p>
+    <p>Page Count: <span id="page-count"></span></p>
+
+    <button id="btn_download">Download Converted File</button>
+
+    <script type="text/javascript">
+        // Use URL parameters to populate metadata on the page
+        const urlParams = new URLSearchParams(window.location.search);
+        const wordCount = urlParams.get("wordCount");
+        const characterCount = urlParams.get("characterCount");
+        const pageCount = urlParams.get("pdfPageCount");
+
+        // Set the metadata values into the corresponding elements
+        $("#word-count").text(wordCount);
+        $("#character-count").text(characterCount);
+        $("#page-count").text(pageCount);
+
+        // Handle the download button click event
+        $("#btn_download").click(function () {
+            // Open the download link in a new window/tab
+            window.open('/download');
+        });
+    </script>
+</body>
+
+</html>

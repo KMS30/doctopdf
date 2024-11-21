@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversion Success</title>
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Thanks for using the DOCX to PDF Converter</h1>
+        <h2>Your File Conversion Details:</h2>
+        <p>Word Count: <span id="word-count">WORD_COUNT_PLACEHOLDER</span></p>
+        <p>Character Count: <span id="character-count">CHAR_COUNT_PLACEHOLDER</span></p>
+        <p>Page Count: <span id="page-count">PAGE_COUNT_PLACEHOLDER</span></p>
+
+        <button id="btn_download">Download Converted File</button>
+    </div>
+
+    <script type="text/javascript">
+        // Handle the download button click event
+        $("#btn_download").click(function () {
+            // Open the download link in a new window/tab
+            window.open('/download');
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOCX to PDF Converter</title>
+    <!-- Link to external CSS -->
+    <link href="/styles.css" rel="stylesheet" />
+    <!-- Font Awesome for Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome/css/font-awesome.min.css" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Upload DOCX to Convert to PDF</h1>
+            <form class="fileupload" action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="file-input-wrapper">
+                    <label for="upfile">
+                        <i class="fa fa-upload"></i> Choose a DOCX file
+                    </label>
+                    <input type="file" name="upfile" id="upfile" accept=".docx" />
+                </div>
+                <p id="file-info" style="display: none; color: #28a745; font-weight: bold;"></p>
+                <!-- Message will appear here -->
+                <button type="submit" class="btn-upload">
+                    <i class="fa fa-arrow-right"></i> Convert Now
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Link to external JS -->
+    <script src="/script.js"></script>
+</body>
+
+</html>
