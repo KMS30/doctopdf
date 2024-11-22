@@ -2,8 +2,9 @@
   "name": "doctopdf",
   "version": "1.0.0",
   "description": "doc to pdf webapp",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
+    "start": "node app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -16,6 +17,7 @@
     "express-fileupload": "^1.5.1",
     "mammoth": "^1.8.0",
     "pdf-lib": "^1.17.1",
-    "pizzip": "^3.1.7"
+    "pizzip": "^3.1.7",
+    "puppeteer": "^23.9.0"
   }
 }

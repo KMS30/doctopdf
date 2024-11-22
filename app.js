@@ -1,12 +1,12 @@
 const express = require("express");
 const upload = require("express-fileupload");
 const mammoth = require("mammoth");
-const docxConverter = require("docx-pdf");
 const path = require("path");
 const fs = require("fs");
 const Docxtemplater = require("docxtemplater");
 const PizZip = require("pizzip");
-const { PDFDocument } = require("pdf-lib");
+const puppeteer = require("puppeteer");
+const pdfLib = require("pdf-lib");
 
 const app = express();
 
@@ -16,7 +16,6 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-// Variables
 const extend_pdf = ".pdf";
 const extend_docx = ".docx";
 let down_name;
@@ -32,17 +31,16 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Function to get the page count of a PDF
+// Function to get the page count of a PDF (using pdf-lib)
 async function getPdfPageCount(pdfPath) {
   const pdfBytes = fs.readFileSync(pdfPath);
-  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pdfDoc = await pdfLib.PDFDocument.load(pdfBytes);
   return pdfDoc.getPages().length;
 }
 
 // Handle file upload and processing
 app.post("/upload", (req, res) => {
   if (!req.files || !req.files.upfile) {
-    // Render the error page with a Go Back button
     return res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -68,17 +66,9 @@ app.post("/upload", (req, res) => {
 
   const file = req.files.upfile;
   if (!file.name.endsWith(".docx")) {
-    return res.send(`
-      <html>
-        <head><title>Invalid File</title></head>
-        <body style="text-align: center; padding: 50px;">
-          <h1 style="color: red;">Error: Please upload a valid .docx file.</h1>
-          <p>Only .docx files are accepted. Please try again with the correct file.</p>
-          <a href="/" style="font-size: 16px; padding: 10px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 5px;">Go Back</a>
-        </body>
-      </html>
-    `);
+    return res.send(`...`);
   }
+
   const name = file.name;
   const uploadPath = path.join(uploadsDir, name);
   const fileBaseName = name.split(".")[0];
@@ -96,17 +86,16 @@ app.post("/upload", (req, res) => {
     const zip = new PizZip(docxFile);
     const doc = new Docxtemplater(zip);
 
-    // Extract text from docx file using mammoth for conversion to PDF
+    // Extract text from docx file using mammoth for conversion to HTML
     mammoth
-      .extractRawText({ buffer: docxFile })
+      .convertToHtml({ buffer: docxFile, styleMap: ["p => p"] }) // We can add specific style maps to control formatting
       .then((mammothResult) => {
         console.log("Mammoth result:", mammothResult);
 
-        // Extract word count and character count manually from text
         const text = mammothResult.value;
         const wordCount = text.split(/\s+/).length;
         const characterCount = text.replace(/\s+/g, "").length;
-        const pageCount = "Not available"; // DOCX files don't contain page count
+        const pageCount = "Not available";
 
         // Path where the converted PDF will be placed
         const uploadPdfPath = path.join(
@@ -114,27 +103,91 @@ app.post("/upload", (req, res) => {
           `${fileBaseName}${extend_pdf}`
         );
 
-        // Convert the .docx to PDF
-        docxConverter(uploadPath, uploadPdfPath, async (err, result) => {
-          if (err) {
-            console.error("Conversion error:", err);
-            return res.status(500).send("File conversion failed");
-          }
+        // Use Puppeteer to generate PDF from HTML (instead of PhantomJS)
+        puppeteer
+          .launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] })
+          .then(async (browser) => {
+            const page = await browser.newPage();
 
-          console.log("Conversion result:", result);
+            // Improved HTML template to embed images and preserve layout
+            const contentHtml = `
+              <html>
+                <head>
+                  <style>
+                    body {
+                      font-family: Arial, sans-serif;
+                      font-size: 12pt;
+                      line-height: 1.5;
+                      margin: 20px;
+                    }
+                    p {
+                      margin: 15px 0;
+                    }
+                    h1, h2, h3 {
+                      margin: 20px 0;
+                      page-break-before: always;
+                    }
+                    img {
+                      max-width: 100%;
+                      height: auto;
+                    }
+                    .footer {
+                      position: fixed;
+                      bottom: 0;
+                      left: 0;
+                      width: 100%;
+                      text-align: center;
+                      font-size: 10pt;
+                    }
+                    .page-break {
+                      page-break-before: always;
+                    }
+                  </style>
+                </head>
+                <body>
+                  <div class="content">${text}</div>
+                  <div class="footer">Generated PDF</div>
+                </body>
+              </html>
+            `;
 
-          // Get the page count from the generated PDF
-          try {
-            const pdfPageCount = await getPdfPageCount(uploadPdfPath);
+            await page.setContent(contentHtml, {
+              waitUntil: "domcontentloaded",
+              timeout: 60000,
+            });
 
-            // Redirect to the /down_html route with metadata in the query string
-            const redirectUrl = `/down_html?wordCount=${wordCount}&characterCount=${characterCount}&pdfPageCount=${pdfPageCount}`;
-            res.redirect(redirectUrl);
-          } catch (err) {
-            console.error("Error extracting page count from PDF:", err);
-            res.status(500).send("Error extracting page count");
-          }
-        });
+            // Generate the PDF with correct layout
+            await page.pdf({
+              path: uploadPdfPath,
+              format: "A4",
+              printBackground: true,
+              margin: {
+                top: "20mm",
+                right: "20mm",
+                bottom: "20mm",
+                left: "20mm",
+              },
+              preferCSSPageSize: true,
+            });
+
+            await browser.close();
+
+            // Get the page count from the generated PDF
+            try {
+              const pdfPageCount = await getPdfPageCount(uploadPdfPath);
+
+              // Redirect to the /down_html route with metadata in the query string
+              const redirectUrl = `/down_html?wordCount=${wordCount}&characterCount=${characterCount}&pdfPageCount=${pdfPageCount}`;
+              res.redirect(redirectUrl);
+            } catch (err) {
+              console.error("Error extracting page count from PDF:", err);
+              res.status(500).send("Error extracting page count");
+            }
+          })
+          .catch((err) => {
+            console.error("Puppeteer error:", err);
+            res.status(500).send("PDF generation failed");
+          });
       })
       .catch((err) => {
         console.error("Metadata extraction error:", err);
@@ -172,20 +225,17 @@ app.get("/down_html", (req, res) => {
     return res.status(400).send("Missing metadata parameters.");
   }
 
-  // Read the down_html.html file
   fs.readFile(path.join(__dirname, "down_html.html"), "utf-8", (err, html) => {
     if (err) {
       console.error("Error reading down_html.html:", err);
       return res.status(500).send("Error loading the thank you page");
     }
 
-    // Replace placeholders in down_html.html with actual data
     html = html
       .replace("WORD_COUNT_PLACEHOLDER", wordCount)
       .replace("CHAR_COUNT_PLACEHOLDER", characterCount)
       .replace("PAGE_COUNT_PLACEHOLDER", pdfPageCount);
 
-    // Send the updated HTML as the response
     res.send(html);
   });
 });
