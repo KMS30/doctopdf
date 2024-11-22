@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: doctopdf-service
+spec:
+  selector:
+    app: doctopdf
+  ports:
+    - protocol: TCP
+      port: 80 # The external port to access the service
+      targetPort: 3000 # The internal port in the container
+      nodePort: 30000 # This is the port you will access on localhost
+  type: NodePort

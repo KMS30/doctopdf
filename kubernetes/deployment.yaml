@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doctopdf-deployment
+  labels:
+    app: doctopdf
+spec:
+  replicas: 1 # Number of container instances
+  selector:
+    matchLabels:
+      app: doctopdf
+  template:
+    metadata:
+      labels:
+        app: doctopdf
+    spec:
+      containers:
+        - name: doctopdf
+          image: ksm30/doctopdf:latest # Replace with your Docker Hub image
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
