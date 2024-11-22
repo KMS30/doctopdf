@@ -1,12 +1,10 @@
 const express = require("express");
 const upload = require("express-fileupload");
-const mammoth = require("mammoth");
 const path = require("path");
 const fs = require("fs");
-const Docxtemplater = require("docxtemplater");
-const PizZip = require("pizzip");
-const puppeteer = require("puppeteer");
+const { exec } = require("child_process");
 const pdfLib = require("pdf-lib");
+const mammoth = require("mammoth"); // Import mammoth for DOCX parsing
 
 const app = express();
 
@@ -38,6 +36,23 @@ async function getPdfPageCount(pdfPath) {
   return pdfDoc.getPages().length;
 }
 
+// Function to calculate word and character counts from DOCX
+function getWordAndCharCounts(docxPath) {
+  return new Promise((resolve, reject) => {
+    mammoth
+      .extractRawText({ path: docxPath })
+      .then((result) => {
+        const text = result.value; // Extracted text from DOCX
+        const wordCount = text.split(/\s+/).length; // Split by whitespace to count words
+        const charCount = text.length; // Character count (including spaces)
+        resolve({ wordCount, charCount });
+      })
+      .catch((err) => {
+        reject(err);
+      });
+  });
+}
+
 // Handle file upload and processing
 app.post("/upload", (req, res) => {
   if (!req.files || !req.files.upfile) {
@@ -66,7 +81,27 @@ app.post("/upload", (req, res) => {
 
   const file = req.files.upfile;
   if (!file.name.endsWith(".docx")) {
-    return res.send(`...`);
+    return res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>No File Selected</title>
+            <link href="/styles.css" rel="stylesheet" />
+        </head>
+        <body>
+            <div class="container">
+                <div class="card">
+                    <h1 style="color: red;">Error: Invalid File Type</h1>
+                    <p>Please choose a DOCX file to proceed.</p>
+                    <button onclick="window.history.back()" style="font-size: 16px; padding: 10px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s ease;">Go Back
+                    </button>
+                </div>
+            </div>
+        </body>
+        </html>
+      `);
   }
 
   const name = file.name;
@@ -81,118 +116,38 @@ app.post("/upload", (req, res) => {
       return res.status(500).send("File upload failed");
     }
 
-    // Read the file to extract metadata using docxtemplater
-    const docxFile = fs.readFileSync(uploadPath);
-    const zip = new PizZip(docxFile);
-    const doc = new Docxtemplater(zip);
+    // Path where the converted PDF will be placed
+    const uploadPdfPath = path.join(uploadsDir, `${fileBaseName}${extend_pdf}`);
 
-    // Extract text from docx file using mammoth for conversion to HTML
-    mammoth
-      .convertToHtml({ buffer: docxFile, styleMap: ["p => p"] }) // We can add specific style maps to control formatting
-      .then((mammothResult) => {
-        console.log("Mammoth result:", mammothResult);
+    // Use LibreOffice to convert DOCX to PDF (headless mode)
+    exec(
+      `libreoffice --headless --convert-to pdf --outdir ${uploadsDir} ${uploadPath}`,
+      (err, stdout, stderr) => {
+        if (err) {
+          console.error("LibreOffice conversion error:", stderr);
+          return res.status(500).send("Error during PDF conversion");
+        }
 
-        const text = mammothResult.value;
-        const wordCount = text.split(/\s+/).length;
-        const characterCount = text.replace(/\s+/g, "").length;
-        const pageCount = "Not available";
-
-        // Path where the converted PDF will be placed
-        const uploadPdfPath = path.join(
-          uploadsDir,
-          `${fileBaseName}${extend_pdf}`
-        );
-
-        // Use Puppeteer to generate PDF from HTML (instead of PhantomJS)
-        puppeteer
-          .launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] })
-          .then(async (browser) => {
-            const page = await browser.newPage();
-
-            // Improved HTML template to embed images and preserve layout
-            const contentHtml = `
-              <html>
-                <head>
-                  <style>
-                    body {
-                      font-family: Arial, sans-serif;
-                      font-size: 12pt;
-                      line-height: 1.5;
-                      margin: 20px;
-                    }
-                    p {
-                      margin: 15px 0;
-                    }
-                    h1, h2, h3 {
-                      margin: 20px 0;
-                      page-break-before: always;
-                    }
-                    img {
-                      max-width: 100%;
-                      height: auto;
-                    }
-                    .footer {
-                      position: fixed;
-                      bottom: 0;
-                      left: 0;
-                      width: 100%;
-                      text-align: center;
-                      font-size: 10pt;
-                    }
-                    .page-break {
-                      page-break-before: always;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="content">${text}</div>
-                  <div class="footer">Generated PDF</div>
-                </body>
-              </html>
-            `;
-
-            await page.setContent(contentHtml, {
-              waitUntil: "domcontentloaded",
-              timeout: 60000,
-            });
-
-            // Generate the PDF with correct layout
-            await page.pdf({
-              path: uploadPdfPath,
-              format: "A4",
-              printBackground: true,
-              margin: {
-                top: "20mm",
-                right: "20mm",
-                bottom: "20mm",
-                left: "20mm",
-              },
-              preferCSSPageSize: true,
-            });
-
-            await browser.close();
-
+        // File conversion succeeded, get word and character counts
+        getWordAndCharCounts(uploadPath)
+          .then(({ wordCount, charCount }) => {
             // Get the page count from the generated PDF
-            try {
-              const pdfPageCount = await getPdfPageCount(uploadPdfPath);
-
-              // Redirect to the /down_html route with metadata in the query string
-              const redirectUrl = `/down_html?wordCount=${wordCount}&characterCount=${characterCount}&pdfPageCount=${pdfPageCount}`;
-              res.redirect(redirectUrl);
-            } catch (err) {
-              console.error("Error extracting page count from PDF:", err);
-              res.status(500).send("Error extracting page count");
-            }
+            getPdfPageCount(uploadPdfPath)
+              .then((pdfPageCount) => {
+                const redirectUrl = `/down_html?wordCount=${wordCount}&characterCount=${charCount}&pdfPageCount=${pdfPageCount}`;
+                res.redirect(redirectUrl);
+              })
+              .catch((err) => {
+                console.error("Error extracting PDF page count:", err);
+                res.status(500).send("Error extracting metadata");
+              });
           })
           .catch((err) => {
-            console.error("Puppeteer error:", err);
-            res.status(500).send("PDF generation failed");
+            console.error("Error extracting word and character count:", err);
+            res.status(500).send("Error extracting word and character count");
           });
-      })
-      .catch((err) => {
-        console.error("Metadata extraction error:", err);
-        res.status(500).send("Error extracting metadata");
-      });
+      }
+    );
   });
 });
 

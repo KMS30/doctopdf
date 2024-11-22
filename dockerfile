@@ -8,9 +8,9 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm install --production
 
-# Install required libraries for Puppeteer (Chromium dependencies)
+# Install required libraries for Puppeteer (Chromium dependencies) and LibreOffice
 RUN apt-get update && apt-get install -y \
   wget \
   ca-certificates \
@@ -31,16 +31,17 @@ RUN apt-get update && apt-get install -y \
   lsb-release \
   xdg-utils \
   chromium \
+  libreoffice \
   --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
+# Set the environment variable for Puppeteer to use the system-installed Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy the entire project directory into the container
 COPY . .
 
 # Expose the port the app will run on
 EXPOSE 3000
-
-# Set the environment variable for Puppeteer to run without sandboxing
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Start the application
 CMD ["npm", "start"]
